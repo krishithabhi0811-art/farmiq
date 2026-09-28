@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2316a34a'/%3E%3Cpath d='M50 78V42M50 46c0-12 10-20 22-20 0 12-10 20-22 20zm0 0c0-12-10-20-22-20 0 12 10 20 22 20z' stroke='white' stroke-width='7' stroke-linecap='round' fill='none'/%3E%3C/svg%3E" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#16a34a" />
+    <meta name="description" content="FARM-IQ — a friendly farming companion. Track your crops, check soil fertility, scan plant photos and get AI advice in your own language." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>FARM-IQ · Your Farming Companion</title>
+    <style>
+      #boot { position: fixed; inset: 0; display: grid; place-items: center; background: #F8FAFC; font-family: Inter, system-ui, sans-serif; }
+      #boot .b { width: 46px; height: 46px; border-radius: 50%; border: 4px solid #dcfce7; border-top-color: #16a34a; animation: sp 0.8s linear infinite; }
+      @keyframes sp { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div id="boot"><div class="b"></div></div></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,39 @@
+# ─────────────────────────────────────────────────────────────
+#  Render Blueprint — deploys FARM-IQ backend in one click.
+#  In Render:  New +  →  Blueprint  →  pick this repo.
+#  Then paste the secret env vars (Supabase + Gemini) in the dashboard.
+# ─────────────────────────────────────────────────────────────
+services:
+  - type: web
+    name: farmiq-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 30d
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_DB_PASSWORD
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      - key: CLIENT_URL
+        sync: false

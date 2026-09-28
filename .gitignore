@@ -1,0 +1,40 @@
+# dependencies
+node_modules
+**/node_modules
+
+# env / secrets  (NEVER commit these)
+.env
+**/.env
+.env.local
+.env.*.local
+!.env.example
+
+# builds
+dist
+build
+out
+**/dist
+**/build
+**/out
+.vercel
+.cache
+.turbo
+
+# logs
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# editor / os
+.DS_Store
+Thumbs.db
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# misc
+coverage
+*.local
+.temp
+tmp
