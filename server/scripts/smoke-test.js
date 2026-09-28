@@ -7,6 +7,20 @@
  */
 const BASE = (process.argv[2] || process.env.SMOKE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** AI providers occasionally spike with "high demand" — one calm retry. */
+async function aiCall(fn, attempts = 3) {
+  let last = null;
+  for (let i = 0; i < attempts; i++) {
+    last = await fn();
+    if (last.status === 200 && last.json?.text) return last;
+    if (last.status >= 500 || last.status === 503 || last.status === 408) { await sleepMs(4000); continue; }
+    return last;
+  }
+  return last;
+}
+
 let pass = 0, fail = 0;
 const ok = (m) => { pass++; console.log(`  ✓ ${m}`); };
 const no = (m, extra = '') => { fail++; console.log(`  ✗ ${m}${extra ? ` → ${extra}` : ''}`); };
@@ -116,13 +130,13 @@ async function api(method, path, { token, body } = {}) {
   lt.status === 200 && lt.json.tests.length >= 1 ? ok('list saved soil tests') : no('list soil tests');
 
   // 18. AI
-  const ai = await api('POST', '/api/ai/generate', { token: tokenA, body: { prompt: 'My paddy leaves are turning yellow. What should I do?', mode: 'advisory' } });
+  const ai = await aiCall(() => api('POST', '/api/ai/generate', { token: tokenA, body: { prompt: 'My paddy leaves are turning yellow. What should I do?', mode: 'advisory' } }));
   ai.status === 200 && ai.json?.text?.length > 20 ? ok(`AI generate works (${ai.json.text.length} chars from ${ai.json.model})`) : no('AI generate', `${ai.status} ${JSON.stringify(ai.json).slice(0, 160)}`);
   const aiNoAuth = await api('POST', '/api/ai/generate', { body: { prompt: 'hi' } });
   aiNoAuth.status === 401 ? ok('AI route requires login') : no('AI should require auth', aiNoAuth.status);
 
   // 18b. AI summary of a saved record (must be a full answer, not truncated)
-  const sum = await api('POST', '/api/ai/summarize', { token: tokenA, body: { recordId: itemId } });
+  const sum = await aiCall(() => api('POST', '/api/ai/summarize', { token: tokenA, body: { recordId: itemId } }), 2);
   sum.status === 200 && sum.json?.ai_summary?.length > 40
     ? ok(`AI summary saved to the record (${sum.json.ai_summary.length} chars)`)
     : no('AI summarize', `${sum.status} ${JSON.stringify(sum.json).slice(0, 160)}`);
@@ -130,7 +144,7 @@ async function api(method, path, { token, body } = {}) {
   reread.json?.item?.ai_summary ? ok('AI summary is stored in the database') : no('summary not persisted');
 
   // 18c. multilingual reply (same language back)
-  const hindi = await api('POST', '/api/ai/generate', { token: tokenA, body: { prompt: 'धान में खरपतवार कैसे रोकें?', mode: 'chat' } });
+  const hindi = await aiCall(() => api('POST', '/api/ai/generate', { token: tokenA, body: { prompt: 'धान में खरपतवार कैसे रोकें?', mode: 'chat' } }));
   hindi.status === 200 && hindi.json?.text?.length > 20
     ? ok(`AI answers in the farmer's language (${hindi.json.text.length} chars)`)
     : no('AI hindi reply', `${hindi.status}`);
@@ -176,7 +190,7 @@ async function api(method, path, { token, body } = {}) {
     }
 
     if (photoId) {
-      const read = await api('POST', `/api/cameras/${cameraId}/photos/${photoId}/analyse`, { token: tokenA });
+      const read = await aiCall(() => api('POST', `/api/cameras/${cameraId}/photos/${photoId}/analyse`, { token: tokenA }), 2);
       read.status === 200 && read.json?.ai_note?.length > 20
         ? ok(`AI reads the field photo (${read.json.ai_note.length} chars)`)
         : no('AI field photo reading', `${read.status} ${JSON.stringify(read.json).slice(0, 120)}`);

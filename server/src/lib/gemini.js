@@ -108,10 +108,10 @@ export async function generate({ contents, system, temperature = 0.7, maxTokens 
 
   let lastError = 'The AI service is unavailable right now.';
 
-  // Two passes over the model chain; transient "high demand" spikes usually clear
-  // in a couple of seconds, so the farmer sees an answer instead of an error.
-  for (let pass = 0; pass < 2; pass++) {
-    if (pass > 0) await sleep(1200);
+  // Three passes over the model chain; transient "high demand" spikes usually
+  // clear in a few seconds, so the farmer sees an answer instead of an error.
+  for (let pass = 0; pass < 3; pass++) {
+    if (pass > 0) await sleep(pass === 1 ? 1200 : 3000);
 
     for (const model of modelChain()) {
       // 1) normal attempt (thinking off — faster and never eats the output budget)
