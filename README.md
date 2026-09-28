@@ -165,3 +165,37 @@ so a leaked anon key can read **nothing** — `npm run db:verify` proves it.
 * AI output is advisory — the UI tells farmers to confirm chemical doses locally.
 
 *Made for farmers. 🌾*
+
+---
+
+## 🤖 Deploy scripts (what was actually used to ship this)
+
+Both scripts are idempotent — run them again any time you change something.
+
+```bash
+# backend → Render   (creates/updates the web service + env vars)
+cd server
+set -a && . ./.env && set +a
+RENDER_API_KEY=rnd_… CLIENT_URL=https://your-app.vercel.app node scripts/deploy-render.js
+
+# frontend → Vercel  (builds client/dist and uploads it as a production deployment)
+cd ../client
+npm run build
+VERCEL_TOKEN=vcp_… API_URL=https://your-service.onrender.com node scripts/deploy-vercel.js
+```
+
+**Why the frontend is uploaded as a pre-built bundle:** this Vercel account has no
+GitHub integration installed, so a git-linked build isn't possible. Instead the built
+`dist/` is uploaded and a `vercel.json` proxies `/api/*` to the Render backend — which
+also means the browser only ever talks to its own origin, so there is no CORS at all.
+
+**Live URLs**
+
+| | |
+|---|---|
+| Frontend | https://farmiq-flax.vercel.app |
+| Backend  | https://farmiq-api-y3sj.onrender.com/api/health |
+| Repo     | https://github.com/krishithabhi0811-art/farmiq |
+
+> Render's free tier sleeps after ~15 minutes of no traffic; the first request after
+> that can take 30-60 seconds to wake up. Everything after that is instant.

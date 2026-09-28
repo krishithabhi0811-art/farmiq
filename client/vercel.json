@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://REPLACE_WITH_RENDER_URL/api/:path*" },
+    { "source": "/api/:path*", "destination": "https://farmiq-api-y3sj.onrender.com/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
