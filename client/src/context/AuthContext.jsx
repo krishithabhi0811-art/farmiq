@@ -19,9 +19,13 @@ export function AuthProvider({ children }) {
       const { user: me } = await api.me();
       setUser(me);
       return me;
-    } catch {
-      tokenStore.clear();
-      setUser(null);
+    } catch (e) {
+      // Only sign the user out if the server actually rejected the token.
+      // A network hiccup / cold-starting backend must NOT log anyone out.
+      if (e.status === 401 || e.status === 403) {
+        tokenStore.clear();
+        setUser(null);
+      }
       return null;
     } finally {
       setLoading(false);

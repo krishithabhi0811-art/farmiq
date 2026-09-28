@@ -40,8 +40,10 @@ async function request(method, path, { body, auth = true, timeout = 45000 } = {}
     });
   } catch (e) {
     clearTimeout(timer);
-    if (e.name === 'AbortError') throw new ApiError('The server took too long to answer. Please try again.', 408);
-    throw new ApiError('Cannot reach the server. Check your internet connection.', 0);
+    if (e.name === 'AbortError') {
+      throw new ApiError('The server is taking longer than usual (it may be waking up). Please try again.', 408);
+    }
+    throw new ApiError('Cannot reach the server. Check your internet, then try again in a few seconds.', 0);
   }
   clearTimeout(timer);
 
@@ -98,5 +100,6 @@ export const api = {
   deleteSoilTest: (id) => request('DELETE', `/soil/tests/${id}`),
   soilPlan: (testId, note) => request('POST', '/soil/plan', { body: { testId, note }, timeout: 90000 }),
 
-  health: () => request('GET', '/health', { auth: false, timeout: 12000 }),
+  // generous timeout: the free hosting tier sleeps and needs time to wake up
+  health: () => request('GET', '/health', { auth: false, timeout: 60000 }),
 };

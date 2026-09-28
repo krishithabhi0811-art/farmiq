@@ -121,6 +121,20 @@ async function api(method, path, { token, body } = {}) {
   const aiNoAuth = await api('POST', '/api/ai/generate', { body: { prompt: 'hi' } });
   aiNoAuth.status === 401 ? ok('AI route requires login') : no('AI should require auth', aiNoAuth.status);
 
+  // 18b. AI summary of a saved record (must be a full answer, not truncated)
+  const sum = await api('POST', '/api/ai/summarize', { token: tokenA, body: { recordId: itemId } });
+  sum.status === 200 && sum.json?.ai_summary?.length > 40
+    ? ok(`AI summary saved to the record (${sum.json.ai_summary.length} chars)`)
+    : no('AI summarize', `${sum.status} ${JSON.stringify(sum.json).slice(0, 160)}`);
+  const reread = await api('GET', `/api/items/${itemId}`, { token: tokenA });
+  reread.json?.item?.ai_summary ? ok('AI summary is stored in the database') : no('summary not persisted');
+
+  // 18c. multilingual reply (same language back)
+  const hindi = await api('POST', '/api/ai/generate', { token: tokenA, body: { prompt: 'धान में खरपतवार कैसे रोकें?', mode: 'chat' } });
+  hindi.status === 200 && hindi.json?.text?.length > 20
+    ? ok(`AI answers in the farmer's language (${hindi.json.text.length} chars)`)
+    : no('AI hindi reply', `${hindi.status}`);
+
   // 19. AI image validation
   const badImg = await api('POST', '/api/ai/scan', { token: tokenA, body: { image: 'not-an-image' } });
   badImg.status === 400 ? ok('camera scan rejects invalid image input') : no('scan validation', badImg.status);
