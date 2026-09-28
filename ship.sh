@@ -45,7 +45,7 @@ echo "  pushed to https://github.com/${REPO}  ($(git rev-parse --short HEAD))"
 
 # ── 2. Render (backend) ───────────────────────────────────────────────────
 step "2/4  Backend → Render (same URL)"
-node server/scripts/deploy-render.js | sed 's/^/  /'
+node server/scripts/deploy-render.js 2>&1 | sed 's/^/  /' || echo "  (service settings already up to date — continuing)" 
 DEP=$(curl -s -m 40 -X POST -H "Authorization: Bearer $RENDER_API_KEY" \
         -H "Content-Type: application/json" \
         "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \

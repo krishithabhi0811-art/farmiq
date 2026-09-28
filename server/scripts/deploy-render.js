@@ -65,7 +65,7 @@ const req = async (method, path, body) => {
   if (found) {
     console.log('service exists → updating env vars + build settings');
     service = found.service;
-    await req('PUT', `/services/${service.id}`, {
+    await req('PATCH', `/services/${service.id}`, {
       name: NAME, repo: REPO, branch: payload.branch, rootDir: 'server', autoDeploy: 'yes',
       serviceDetails: payload.serviceDetails,
     });
