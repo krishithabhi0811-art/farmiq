@@ -57,6 +57,20 @@ farmiq/
 
 ---
 
+## 🚢 Ship a change (same URLs, every time)
+
+```bash
+bash ship.sh "what I changed"     # push → Render → Vercel → 40 live tests
+```
+
+* App (permanent): **https://farmiq-flax.vercel.app**
+* API (permanent): **https://farmiq-api-y3sj.onrender.com**
+* Deploy tokens live in `.deploy.env` (git-ignored). The Vercel step re-assigns the
+  permanent domain to each new build and verifies the live bundle, so the address
+  farmers bookmarked never changes. The app shows its build commit on the **Profile** page.
+
+---
+
 ## 🚀 Run it locally
 
 ```bash

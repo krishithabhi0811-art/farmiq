@@ -14,6 +14,11 @@ Your app is **built, deployed and tested**. Everything below is live right now.
 
 Open the app link on your phone → tap **Create account** → you're in. 🎉
 
+> **These links never change.** Every future fix or feature is shipped **to the same two
+> addresses** — you never have to re-share a new link with farmers. To check which version
+> you are looking at: open the app → **Profile** → the small line at the bottom
+> (`FARM-IQ · build <commit> · <time>`).
+
 ---
 
 ## ✅ What was tested before handing over
@@ -92,30 +97,43 @@ The frontend only knows one thing: the address of its own backend. That's why it
 
 ## 🛠️ How to change something and ship it
 
-You (or I) edit the code, then:
+One command does everything — commit, push, backend, frontend, tests — and keeps the
+**same URLs**:
 
 ```bash
-# 1. commit + push  (Render can auto-deploy from GitHub)
-cd ~/farmiq && git add -A && git commit -m "my change" && git push
-
-# 2. backend → Render  (idempotent: creates or updates the service)
-cd server
-set -a && . ./.env && set +a
-node scripts/deploy-render.js            # RENDER_API_KEY=… env var
-
-# 3. frontend → Vercel  (builds and uploads a production deployment)
-cd ../client && npm run build
-npm run deploy                            # uses VERCEL_TOKEN + API_URL
+cd ~/farmiq
+bash ship.sh "what I changed"
 ```
 
-> **Note for later:** your Vercel account has no GitHub integration connected, so the
-> frontend is uploaded as a pre-built bundle by the script above (that's also why there's
-> zero CORS trouble — the browser only ever talks to its own domain, and `/api/*` is
-> proxied to Render). If you later connect GitHub in Vercel, you can switch to automatic
-> builds. Same idea on Render: if pushes don't trigger a deploy automatically, install the
-> Render GitHub App or just run `node scripts/deploy-render.js` again.
+What it does, in order:
 
----
+1. **GitHub** — commits and pushes the code.
+2. **Backend (Render)** — triggers a deploy and waits until it is live at
+   `https://farmiq-api-y3sj.onrender.com`.
+3. **Frontend (Vercel)** — rebuilds and uploads, then **pins the stable address
+   `farmiq-flax.vercel.app` to the new build** (that pinning is what makes the URL
+   permanent) and verifies the live site is really serving the newest bundle.
+4. **Tests** — runs the 40 live end-to-end tests and prints the result.
+
+At the end you get a short summary with the two URLs and the commit that is live.
+Your tokens live in `.deploy.env` (git-ignored, never pushed).
+
+The same steps by hand, if you ever prefer them:
+
+```bash
+cd ~/farmiq && git add -A && git commit -m "my change" && git push
+
+cd server && set -a && . ./.env && set +a && . ./.deploy.env 2>/dev/null; set +a
+RENDER_API_KEY=$RENDER_API_KEY node scripts/deploy-render.js     # service settings
+
+cd ../client && npm run build && VERCEL_TOKEN=$VERCEL_TOKEN API_URL=https://farmiq-api-y3sj.onrender.com npm run deploy
+```
+
+> **Why the URL is stable:** the Vercel deploy script assigns the domain
+> `farmiq-flax.vercel.app` to every new production deployment (step 3 above) and then
+> downloads the live page to confirm it serves the new bundle. On Render the service
+> URL is permanent by design. If you ever connect GitHub inside Vercel, automatic
+> builds will also keep the same domain — no new links either way.
 
 ## ⏰ One thing to know about Render's free plan
 
