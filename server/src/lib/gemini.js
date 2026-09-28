@@ -18,13 +18,14 @@ const API_ROOT = 'https://generativelanguage.googleapis.com/v1beta/models';
 export function modelChain(primary = env.GEMINI_MODEL) {
   return [...new Set([
     primary,
-    'gemini-3.8-flash',
-    'gemini-flash-latest',
+    // Then the quick, rarely-busy models: a farmer should never wait minutes
+    // for an answer, and these are different model families — when the
+    // flagship hits its per-minute quota (429) they still answer.
     'gemini-flash-lite-latest',
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-3.5-flash',
+    'gemini-3.6-flash',
     'gemini-3.1-flash-lite',
+    'gemini-flash-latest',
+    'gemini-3.5-flash',
   ].filter(Boolean))];
 }
 
@@ -43,9 +44,9 @@ const dataUrlToPart = (dataUrl) => {
  * "thinking" tokens — they are not needed for short farming answers and,
  * if left on, they can swallow the whole output budget (empty replies).
  */
-async function callModel(model, { contents, system, temperature, maxTokens, noThink }) {
+async function callModel(model, { contents, system, temperature, maxTokens, noThink, timeoutMs = 45_000 }) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 55_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   const generationConfig = { temperature, maxOutputTokens: maxTokens };
   if (noThink) generationConfig.thinkingConfig = { thinkingBudget: 0 };
@@ -73,12 +74,15 @@ async function callModel(model, { contents, system, temperature, maxTokens, noTh
     const json = await res.json().catch(() => null);
     const candidate = json?.candidates?.[0];
     const text = (candidate?.content?.parts || []).map((p) => p?.text || '').join('').trim();
+    const retryInfo = (json?.error?.details || []).find((d) => String(d?.['@type'] || '').includes('RetryInfo'));
+    const retryAfterMs = retryInfo?.retryDelay ? Math.round(parseFloat(retryInfo.retryDelay) * 1000) : 0;
     return {
       ok: res.ok,
       status: res.status,
       message: json?.error?.message || `AI request failed (${res.status})`,
       text,
       finishReason: candidate?.finishReason,
+      retryAfterMs: Number.isFinite(retryAfterMs) ? retryAfterMs : 0,
     };
   } catch (err) {
     clearTimeout(timer);
@@ -108,19 +112,37 @@ export async function generate({ contents, system, temperature = 0.7, maxTokens 
 
   let lastError = 'The AI service is unavailable right now.';
 
-  // Three passes over the model chain; transient "high demand" spikes usually
-  // clear in a few seconds, so the farmer sees an answer instead of an error.
-  for (let pass = 0; pass < 3; pass++) {
-    if (pass > 0) await sleep(pass === 1 ? 1200 : 3000);
+  // Hard ceiling on the whole request: better to say "please try again" quickly
+  // than to make a farmer stare at a spinner for minutes.
+  const deadline = Date.now() + 75_000;
+  const withImage = contents.some((c) => (c.parts || []).some((p) => p.inline_data || p.inlineData));
+  const chain = modelChain();
+  // 1st attempt may take its time, later attempts are cut short so the next
+  // (usually faster) model gets a turn.
+  const attemptTimeout = (i) => (withImage ? (i === 0 ? 45_000 : 28_000) : i === 0 ? 20_000 : 20_000);
 
-    for (const model of modelChain()) {
+  // A model that says "quota exceeded, retry in 34s" is of no use to us inside
+  // this request — remember when it is allowed again and skip it.
+  const coolDown = new Map();
+
+  let attempt = 0;
+  // Two passes over the model chain; transient "high demand" spikes usually
+  // clear in a few seconds, so the farmer sees an answer instead of an error.
+  for (let pass = 0; pass < 2; pass++) {
+    if (pass > 0) await sleep(1200);
+
+    for (const model of chain) {
+      if (Date.now() > deadline - 3_000) break;
+      if ((coolDown.get(model) || 0) > Date.now()) continue;
+      const left = Math.max(8_000, Math.min(attemptTimeout(attempt), deadline - Date.now()));
+      attempt++;
       // 1) normal attempt (thinking off — faster and never eats the output budget)
-      let out = await callModel(model, { contents, system, temperature, maxTokens, noThink: true });
+      let out = await callModel(model, { contents, system, temperature, maxTokens, noThink: true, timeoutMs: left });
 
       // Some models reject thinkingConfig with a generic "invalid argument" —
       // so on ANY 400, retry the same model once with thinking left alone.
       if (!out.ok && out.status === 400) {
-        const retry = await callModel(model, { contents, system, temperature, maxTokens, noThink: false });
+        const retry = await callModel(model, { contents, system, temperature, maxTokens, noThink: false, timeoutMs: Math.max(8_000, Math.min(30_000, deadline - Date.now())) });
         out = retry.ok ? retry : { ...out, message: retry.message || out.message };
       }
 
@@ -128,6 +150,7 @@ export async function generate({ contents, system, temperature = 0.7, maxTokens 
       if (out.ok && !out.text && out.finishReason === 'MAX_TOKENS') {
         out = await callModel(model, {
           contents, system, temperature, maxTokens: Math.min(maxTokens * 3, 8192), noThink: true,
+          timeoutMs: Math.max(8_000, Math.min(40_000, deadline - Date.now())),
         });
       }
 
@@ -144,6 +167,7 @@ export async function generate({ contents, system, temperature = 0.7, maxTokens 
       }
 
       lastError = out.message;
+      if (out.status === 429) coolDown.set(model, Date.now() + Math.min(out.retryAfterMs || 30_000, 120_000));
 
       // Genuine client error (bad prompt / bad image) → stop and tell the farmer
       if (!TRANSIENT.includes(out.status) && out.status !== 404) {
@@ -155,8 +179,13 @@ export async function generate({ contents, system, temperature = 0.7, maxTokens 
     }
   }
 
-  const e = new Error('The AI is busy right now. Please ask again in a few seconds.');
-  e.status = 503;
+  const timedOut = /took too long/i.test(lastError || '');
+  const e = new Error(
+    timedOut
+      ? 'The AI is a bit slow right now. Please try again in a moment.'
+      : 'The AI is busy right now. Please ask again in a few seconds.',
+  );
+  e.status = 503; // busy / slow is a server-side condition, never the farmer's fault
   e.cause = lastError;
   throw e;
 }
