@@ -154,7 +154,7 @@ router.post(
     let ai_note = null;
     const wantsAnalysis = camera.auto_analyse || req.query.analyse === '1' || req.body?.analyse === true;
     if (wantsAnalysis && analysisAllowed(camera.id)) {
-      ai_note = await analysePhoto(camera, photo).catch(() => null);
+      ai_note = await analysePhoto(camera, photo, { markAuto: true }).catch(() => null);
     }
 
     res.status(201).json({
@@ -168,8 +168,12 @@ router.post(
   }),
 );
 
-/** Ask the AI what it sees in a field photo and store the reading. */
-async function analysePhoto(camera, photo) {
+/**
+ * Ask the AI what it sees in a field photo and store the reading.
+ * `markAuto` only matters for the automatic path — the farmer pressing
+ * "AI reading" by hand is never throttled (the per-user AI limiter covers that).
+ */
+async function analysePhoto(camera, photo, { markAuto = false } = {}) {
   const text = await generateWithImage(FIELD_CAMERA_PROMPT, photo.image, {
     system: FARMER_SYSTEM,
     temperature: 0.4,
@@ -177,7 +181,7 @@ async function analysePhoto(camera, photo) {
   });
   await supabaseAdmin.from('camera_photos').update({ ai_note: text })
     .eq('id', photo.id).eq('user_id', camera.user_id);
-  lastAnalysis.set(camera.id, Date.now());
+  if (markAuto) lastAnalysis.set(camera.id, Date.now());
   return text;
 }
 

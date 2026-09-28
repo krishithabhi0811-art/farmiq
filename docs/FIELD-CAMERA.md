@@ -217,14 +217,24 @@ ID="paste-camera-id-here"
 KEY="fqcam_paste_camera_key_here"
 API="https://farmiq-api-y3sj.onrender.com"
 SNAP="/tmp/field.jpg"
+BODY="/tmp/body.json"
 
 curl -s --max-time 20 "http://admin:pass@192.168.1.50/snapshot.cgi" -o "$SNAP"
 
-curl -s -X POST "$API/api/cameras/$ID/upload" \
+# Build the JSON body in a file — a real photo is far too big for a command line
+printf '{"image":"data:image/jpeg;base64,' > "$BODY"
+base64 -w0 "$SNAP" >> "$BODY"
+printf '"}' >> "$BODY"
+
+curl -s --max-time 60 -X POST "$API/api/cameras/$ID/upload" \
   -H "Content-Type: application/json" \
   -H "x-camera-key: $KEY" \
-  -d "{\"image\":\"data:image/jpeg;base64,$(base64 -w0 "$SNAP")\"}"
+  --data-binary @"$BODY"
 ```
+
+> On macOS use `base64 -i "$SNAP"` (no `-w0`) — everything else is the same.
+> Never inline the base64 in the command itself (`-d "…$(base64 …)"`): photos over
+> ~100 KB overflow the shell's argument limit.
 
 Add `?analyse=1` to the upload URL and the AI will read **every** photo automatically
 (that is the same as ticking *"Ask the AI to look at every photo automatically"* in the app).
