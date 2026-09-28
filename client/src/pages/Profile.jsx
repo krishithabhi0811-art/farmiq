@@ -191,6 +191,11 @@ export default function Profile() {
               <span>{t('profile.dataNote')}</span>
             </div>
           </InfoBox>
+
+          {/* Build stamp — proves this URL is serving the newest code */}
+          <p className="pb-2 text-center text-xs text-slate-400">
+            FARM-IQ · build {__BUILD_SHA__} · {__BUILD_TIME__} UTC
+          </p>
         </div>
       </div>
     </div>

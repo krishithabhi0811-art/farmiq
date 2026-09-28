@@ -111,8 +111,25 @@ function collect(dir, base = '') {
   console.log('');
   if (readyState !== 'READY') throw new Error(`deployment ended in state ${readyState}`);
 
+  // 5. pin the STABLE url to this new deployment, so every change keeps the
+  //    exact same address for farmers (no new link to share, ever).
+  const STABLE = process.env.STABLE_DOMAIN || 'farmiq-flax.vercel.app';
+  const aliasRes = await api('POST', `https://api.vercel.com/v2/deployments/${id}/aliases${q()}`, { alias: STABLE });
+  if (aliasRes.ok || /already assigned|exists/i.test(JSON.stringify(aliasRes.json))) {
+    console.log('stable url    :', `https://${STABLE}`, '→ this deployment ✓');
+  } else {
+    console.warn('alias step  :', JSON.stringify(aliasRes.json).slice(0, 200));
+  }
+
+  // 6. prove what the stable url is really serving (must be the new bundle)
+  const check = await fetch(`https://${STABLE}/`, { cache: 'no-store' }).then((r) => r.text()).catch(() => '');
+  const served = /\/assets\/(index-[A-Za-z0-9._-]+\.js)/.exec(check)?.[1];
+  const fresh = fs.existsSync(path.join(DIST, 'assets')) &&
+    fs.readdirSync(path.join(DIST, 'assets')).filter((f) => f.endsWith('.js')).every((f) => f === served);
+  console.log('serving       :', served || '(not reachable yet)', fresh ? '← newest build ✓' : '(may still be propagating)');
+
   const aliases = (await api('GET', `https://api.vercel.com/v9/projects/${PROJECT}${q()}`)).json?.alias || [];
-  console.log('production url :', `https://${url}`);
-  console.log('project domains:', aliases.map((a) => a.domain).join(', ') || '(default domain assigned)');
-  console.log('PRODUCTION_URL=https://' + (aliases[0]?.domain || url));
+  console.log('preview url   :', `https://${url}`);
+  console.log('all domains   :', aliases.map((a) => a.domain).join(', ') || '(default domain assigned)');
+  console.log('PRODUCTION_URL=https://' + STABLE);
 })().catch((e) => { console.error('\n✗', e.message); process.exit(1); });
