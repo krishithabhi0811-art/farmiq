@@ -19,7 +19,7 @@ const bad = (m) => { failures++; console.log(`  ✗ ${m}`); };
 const info = (m) => console.log(`  – ${m}`);
 let failures = 0;
 
-const WANT_TABLES = ['profiles', 'items', 'soil_tests', 'ai_messages'];
+const WANT_TABLES = ['profiles', 'items', 'soil_tests', 'ai_messages', 'cameras', 'camera_photos'];
 const WANT_COLUMNS = ['id', 'user_id', 'title', 'description', 'ai_summary', 'created_at'];
 
 /** Run a read-only query through whichever route is available. */
@@ -55,7 +55,7 @@ try {
     info('no SQL access configured (fine in production) — skipping catalog checks');
   }
 
-  const rls = await query(`select relname, relrowsecurity from pg_class where relkind='r' and relname in ('profiles','items','soil_tests','ai_messages')`);
+  const rls = await query(`select relname, relrowsecurity from pg_class where relkind='r' and relname in ('profiles','items','soil_tests','ai_messages','cameras','camera_photos')`);
   if (rls) {
     for (const r of rls) r.relrowsecurity ? ok(`RLS enabled on ${r.relname}`) : bad(`RLS NOT enabled on ${r.relname}`);
   }
@@ -69,6 +69,20 @@ try {
     const missing = WANT_COLUMNS.filter((c) => !names.includes(c));
     missing.length === 0 ? ok(`items table has all ${WANT_COLUMNS.length} expected columns`) : bad(`items is missing: ${missing.join(', ')}`);
   }
+
+  const camCols = await query(`select column_name from information_schema.columns where table_schema='public' and table_name='cameras'`);
+  if (camCols) {
+    const names = camCols.map((r) => r.column_name);
+    const missing = ['id', 'user_id', 'name', 'device_key', 'is_active'].filter((c) => !names.includes(c));
+    missing.length === 0 ? ok('cameras table has the device-key columns') : bad(`cameras is missing: ${missing.join(', ')}`);
+  }
+
+  const photoCols = await query(`select column_name from information_schema.columns where table_schema='public' and table_name='camera_photos'`);
+  if (photoCols) {
+    const names = photoCols.map((r) => r.column_name);
+    const missing = ['id', 'camera_id', 'image', 'captured_at', 'ai_note'].filter((c) => !names.includes(c));
+    missing.length === 0 ? ok('camera_photos table stores images + timestamps') : bad(`camera_photos is missing: ${missing.join(', ')}`);
+  }
 } catch (e) {
   bad(`catalog check failed: ${e.message}`);
 }
@@ -78,6 +92,14 @@ if (env.SUPABASE_ANON_KEY) {
   const items = await supabaseAnon.from('items').select('id').limit(1);
   if (items.error || !items.data?.length) ok('anon key is blocked by RLS (0 rows visible) — leaked keys cannot read farm data');
   else bad(`anon key could read ${items.data.length} item row(s) — RLS is not protecting data!`);
+
+  const cams = await supabaseAnon.from('cameras').select('id, device_key').limit(1);
+  if (cams.error || !cams.data?.length) ok('anon key cannot read field cameras (device keys protected)');
+  else bad('anon key could read cameras — check RLS!');
+
+  const camsPhotos = await supabaseAnon.from('camera_photos').select('id').limit(1);
+  if (camsPhotos.error || !camsPhotos.data?.length) ok('anon key cannot read field photos');
+  else bad('anon key could read camera_photos — check RLS!');
 
   const prof = await supabaseAnon.from('profiles').select('id, password_hash').limit(1);
   if (prof.error || !prof.data?.length) ok('anon key cannot read profiles (password hashes protected)');

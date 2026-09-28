@@ -1,8 +1,13 @@
 # 🌱 FARM-IQ — Farmer Friendly Agriculture App
 
 A simple, beautiful, production-ready full-stack app for small farmers.
-Track crops, check **soil fertility**, **scan plant photos** with the camera, and get
-**AI advice in English / हिन्दी / తెలుగు** — on any phone.
+Track crops, check **soil fertility**, **scan plant photos** with the camera, watch a
+**camera that lives in your field** (ESP32-CAM / Raspberry Pi / IP cam / old phone — it
+uploads on a timer by itself, no login needed on the device), and get **AI advice in
+English / हिन्दी / తెలుగు** — on any phone.
+
+> **New to it?** Read [`START-HERE.md`](START-HERE.md) — the three live links, how each
+> screen works, and the 5-minute field-camera setup. Hardware details: [`docs/FIELD-CAMERA.md`](docs/FIELD-CAMERA.md).
 
 > **Security first:** every secret key lives **only** in `server/.env`.
 > The browser bundle (`client/`) never contains an API key. `.env` is git-ignored.

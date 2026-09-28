@@ -18,12 +18,16 @@ Open the app link on your phone → tap **Create account** → you're in. 🎉
 
 ## ✅ What was tested before handing over
 
-* **29 automated end-to-end tests** pass against the live deployment (signup, login,
+* **40 automated end-to-end tests** pass against the live deployment (signup, login,
   wrong password rejected, session works, create/read/update/delete records, data really
   persists in Postgres, user A can never see or delete user B's data, soil maths, saved
-  soil tests, AI chat, AI summary, AI in Hindi/Telugu, camera-scan input validation).
-* **Database:** 4 tables created for you automatically, Row Level Security ON, 14 policies.
-  Proven: the public anon key can read **0 rows** — nobody can peek at your farmers' data.
+  soil tests, AI chat, AI summary, AI in Hindi/Telugu, camera-scan input validation,
+  and the whole field-camera flow: device key issued → camera uploads a photo → farmer
+  sees it → AI reads it → delete).
+* **Database:** 6 tables created for you automatically (`profiles`, `items`, `soil_tests`,
+  `ai_messages`, `cameras`, `camera_photos`), Row Level Security ON, 21 policies.
+  Proven: the public anon key can read **0 rows** — nobody can peek at your farmers' data
+  or at your camera keys.
 * **Secrets:** the live browser bundle was downloaded and scanned — no API keys, no
   database keys, no tokens found. They live only in `server/.env` (and in Render's env vars).
 * **CORS:** only your Vercel domain (and any `*.vercel.app`) may call the API. Verified.
@@ -40,9 +44,31 @@ Open the app link on your phone → tap **Create account** → you're in. 🎉
 | **Ask AI** | Chat in simple words. Choose a mode: ask anything, action plan, fertiliser plan, pest help, selling help, crop calendar. Ask in English, हिन्दी or తెలుగు — it answers in the same language |
 | **Soil Health** | Type your soil test numbers (pH, EC, N, P, K, organic carbon) → fertility score + exactly how much urea / DAP / MOP to use for your crop and acreage, plus cheap organic-first advice. One tap gives an AI explanation. Save tests to compare over seasons |
 | **Crop Scan** | Opens the phone camera → snap a leaf → AI tells you what is wrong and what to do in 48 hours |
+| **Camera (field cameras)** | Connect a camera that stays in your field (or an old phone in *camera mode*). It uploads photos on a timer by itself; you open them here: gallery, timelapse playback, and an **AI reading** of any photo |
 | **Profile** | Change name, village, land size, language and password |
 
 **Language:** tap the globe icon (top right) any time.
+
+---
+
+## 📷 Put a camera in your field (5 minutes)
+
+1. In the app open **Camera** → tab **My cameras** → **Add camera** (name it *North field*).
+   The app then shows you the **camera ID** and a **camera key** (starts with `fqcam_`) —
+   that key is what lets the camera upload without anyone logging in.
+2. Pick the way that suits you:
+   * **Old Android phone (₹0)** — open the phone's browser, log in once, tap the camera card →
+     **Camera mode**, choose the interval, and leave the phone in the field on charge.
+     It keeps taking and uploading photos by itself (the screen stays awake).
+   * **ESP32-CAM board (₹300–500)** — flash the ready-made sketch from
+     [`docs/FIELD-CAMERA.md`](docs/FIELD-CAMERA.md) and it runs 24×7 on a battery/solar.
+   * **Raspberry Pi / IP camera** — the same guide has a cron + Python script and a plain
+     `curl` recipe (one line, no coding).
+3. Press **Test connection** in the app to see it work, then open the camera card any time to
+   browse the photos. Tap a photo → **AI reading** to have Gemini explain the field.
+
+Full step-by-step with wiring, battery notes and what to do when a photo doesn't arrive:
+**[`docs/FIELD-CAMERA.md`](docs/FIELD-CAMERA.md)**.
 
 ---
 
@@ -107,8 +133,8 @@ farmiq/
 ├── client/     ← what farmers see: React + Vite + Tailwind (light theme, glassmorphism,
 │                 bottom nav on phones, camera, 3 languages)
 └── server/     ← the brain: Express API + Supabase + Gemini. ALL keys live here.
-     ├── src/routes/    auth · items (CRUD) · ai · soil
-     ├── src/lib/       supabase.js · gemini.js (multi-model fallback)
+     ├── src/routes/    auth · items (CRUD) · ai · soil · cameras
+     ├── src/lib/       supabase.js · gemini.js (multi-model fallback, never leaves a farmer waiting)
      ├── db/schema.sql  tables + RLS  (applied for you already)
      └── scripts/       db:setup · db:verify · smoke · deploy-render
 ```
