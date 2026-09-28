@@ -139,6 +139,55 @@ async function api(method, path, { token, body } = {}) {
   const badImg = await api('POST', '/api/ai/scan', { token: tokenA, body: { image: 'not-an-image' } });
   badImg.status === 400 ? ok('camera scan rejects invalid image input') : no('scan validation', badImg.status);
 
+  // 19. FIELD CAMERA — a camera fixed in the field uploads photos; only its owner sees them
+  const fixture = (await import('./lib/test-image.js')).makeTestImageDataUrl(96);
+  const cam = await api('POST', '/api/cameras', { token: tokenA, body: { name: 'Smoke field camera', field_name: 'Field A', capture_interval_minutes: 60 } });
+  const cameraId = cam.json?.camera?.id;
+  const camKey = cam.json?.camera?.device_key;
+  cameraId && camKey ? ok('create field camera (device key issued)') : no('create camera', JSON.stringify(cam.json).slice(0, 160));
+
+  if (cameraId && camKey) {
+    const ping = await fetch(`${BASE}/api/cameras/${cameraId}/ping`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-camera-key': camKey }, body: '{}' });
+    ping.status === 200 ? ok('camera in the field authenticates with its key') : no('camera ping', ping.status);
+
+    const badPing = await fetch(`${BASE}/api/cameras/${cameraId}/ping`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-camera-key': 'fqcam_wrong_key' }, body: '{}' });
+    badPing.status === 401 ? ok('wrong camera key rejected') : no('wrong camera key should 401', badPing.status);
+
+    const up = await fetch(`${BASE}/api/cameras/${cameraId}/upload`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-camera-key': camKey },
+      body: JSON.stringify({ image: fixture, note: 'smoke test frame', battery: '80%' }),
+    });
+    const upJson = await up.json().catch(() => null);
+    up.status === 201 ? ok(`field camera uploads a photo (${(upJson?.photo_id || '').slice(0, 8)})`) : no('camera upload', `${up.status} ${JSON.stringify(upJson).slice(0, 160)}`);
+    const photoId = upJson?.photo_id;
+
+    const noKey = await fetch(`${BASE}/api/cameras/${cameraId}/upload`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: fixture }) });
+    noKey.status === 401 ? ok('upload without a camera key is rejected') : no('keyless upload should 401', noKey.status);
+
+    const listed = await api('GET', `/api/cameras/${cameraId}/photos?limit=5`, { token: tokenA });
+    listed.status === 200 && listed.json.photos.length >= 1 ? ok('farmer sees the field photo in the app') : no('list camera photos', JSON.stringify(listed.json).slice(0, 160));
+
+    const camList = await api('GET', '/api/cameras', { token: tokenA });
+    camList.status === 200 && camList.json.cameras?.[0]?.photo_count >= 1 ? ok('camera list shows photo count + last seen') : no('camera list', camList.status);
+
+    if (tokenB) {
+      const peek = await api('GET', `/api/cameras/${cameraId}/photos`, { token: tokenB });
+      peek.status === 404 ? ok('another farmer cannot see this camera (404)') : no('camera isolation broken', peek.status);
+    }
+
+    if (photoId) {
+      const read = await api('POST', `/api/cameras/${cameraId}/photos/${photoId}/analyse`, { token: tokenA });
+      read.status === 200 && read.json?.ai_note?.length > 20
+        ? ok(`AI reads the field photo (${read.json.ai_note.length} chars)`)
+        : no('AI field photo reading', `${read.status} ${JSON.stringify(read.json).slice(0, 120)}`);
+      const delPhoto = await api('DELETE', `/api/cameras/${cameraId}/photos/${photoId}`, { token: tokenA });
+      delPhoto.status === 200 ? ok('farmer can delete a camera photo') : no('delete camera photo', delPhoto.status);
+    }
+
+    const delCam = await api('DELETE', `/api/cameras/${cameraId}`, { token: tokenA });
+    delCam.status === 200 ? ok('farmer can delete a camera') : no('delete camera', delCam.status);
+  }
+
   // 20. delete + confirm gone
   const d = await api('DELETE', `/api/items/${itemId}`, { token: tokenA });
   d.status === 200 ? ok('DELETE item') : no('delete item', JSON.stringify(d.json));

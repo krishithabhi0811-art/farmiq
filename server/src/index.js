@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js';
 import itemRoutes from './routes/items.js';
 import aiRoutes from './routes/ai.js';
 import soilRoutes from './routes/soil.js';
+import cameraRoutes from './routes/cameras.js';
 import { assessSoil } from './routes/soil.js';
 
 const app = express();
@@ -67,6 +68,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/soil', soilRoutes);
+app.use('/api/cameras', cameraRoutes);
 
 app.use((req, res) => res.status(404).json({ error: `Route ${req.method} ${req.path} not found.` }));
 

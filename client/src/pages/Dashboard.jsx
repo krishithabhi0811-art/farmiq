@@ -14,7 +14,7 @@ import {
 const QUICK = [
   { to: '/app/records?new=1', icon: Icons.plus, key: 'dash.addRecord', tone: 'from-leaf-500 to-leaf-700' },
   { to: '/app/assistant', icon: Icons.chat, key: 'dash.askAi', tone: 'from-sky-500 to-sky-700' },
-  { to: '/app/scan', icon: Icons.camera, key: 'dash.scan', tone: 'from-violet-500 to-violet-700' },
+  { to: '/app/scan?tab=cameras', icon: Icons.camera, key: 'dash.scan', tone: 'from-violet-500 to-violet-700' },
   { to: '/app/soil', icon: Icons.flask, key: 'dash.soil', tone: 'from-soil-500 to-soil-700' },
 ];
 
@@ -26,6 +26,8 @@ export default function Dashboard() {
 
   const [stats, setStats] = useState(null);
   const [items, setItems] = useState([]);
+  const [cameras, setCameras] = useState([]);
+  const [camPhoto, setCamPhoto] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -35,10 +37,24 @@ export default function Dashboard() {
       setLoading(true);
       setError('');
       try {
-        const [s, list] = await Promise.all([api.itemStats(), api.listItems({ limit: 5 })]);
+        const [s, list, cams] = await Promise.all([
+          api.itemStats(),
+          api.listItems({ limit: 5 }),
+          api.listCameras().catch(() => ({ cameras: [] })),
+        ]);
         if (!alive) return;
         setStats(s);
         setItems(list.items || []);
+
+        // newest photo from a field camera, for the "live from your field" card
+        const list2 = cams.cameras || [];
+        setCameras(list2);
+        const withPhotos = list2.find((c) => c.photo_count > 0);
+        if (withPhotos) {
+          api.cameraPhotos(withPhotos.id, { limit: 1 })
+            .then((d) => { if (alive) setCamPhoto({ camera: withPhotos, photo: d.photos?.[0] || null }); })
+            .catch(() => {});
+        }
       } catch (e) {
         if (alive) setError(e.message);
       } finally {
@@ -147,6 +163,32 @@ export default function Dashboard() {
         </section>
 
         <aside className="space-y-4">
+          {cameras.length > 0 && (
+            <div className="card overflow-hidden p-0">
+              <div className="relative h-36 w-full bg-slate-100">
+                {camPhoto?.photo ? (
+                  <img src={camPhoto.photo.image} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="grid h-full w-full place-items-center text-3xl text-slate-300">
+                    <Icons.camera className="h-8 w-8" />
+                  </div>
+                )}
+                <span className="absolute left-3 top-3 chip bg-white/90 text-slate-700 backdrop-blur">
+                  📷 {cameras.length} {t('cam.tabDevices')}
+                </span>
+              </div>
+              <div className="p-4">
+                <div className="font-bold text-slate-900">{camPhoto?.camera?.name || cameras[0].name}</div>
+                <div className="text-xs text-slate-500">
+                  {t('cam.lastSeen')}: {camPhoto?.photo ? timeAgo(camPhoto.photo.captured_at) : t('cam.never')}
+                </div>
+                <Link to="/app/scan?tab=cameras" className="btn-soft mt-3 w-full">
+                  <Icons.grid className="h-4 w-4" /> {t('cam.viewPhotos')}
+                </Link>
+              </div>
+            </div>
+          )}
+
           <div className="card p-5">
             <h2 className="section-title"><Icons.chart className="h-4 w-4 text-leaf-600" /> {t('dash.byCategory')}</h2>
             {chartData.length ? <div className="mt-4"><BarChart data={chartData} height={130} /></div>

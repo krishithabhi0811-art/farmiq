@@ -100,6 +100,47 @@ export const api = {
   deleteSoilTest: (id) => request('DELETE', `/soil/tests/${id}`),
   soilPlan: (testId, note) => request('POST', '/soil/plan', { body: { testId, note }, timeout: 90000 }),
 
+  // ── field cameras (farmer side) ──
+  listCameras: () => request('GET', '/cameras'),
+  createCamera: (payload) => request('POST', '/cameras', { body: payload }),
+  updateCamera: (id, payload) => request('PATCH', `/cameras/${id}`, { body: payload }),
+  deleteCamera: (id) => request('DELETE', `/cameras/${id}`),
+  cameraPhotos: (id, { limit = 24, offset = 0 } = {}) =>
+    request('GET', `/cameras/${id}/photos?limit=${limit}&offset=${offset}`),
+  deleteCameraPhoto: (id, photoId) => request('DELETE', `/cameras/${id}/photos/${photoId}`),
+  analyseCameraPhoto: (id, photoId) =>
+    request('POST', `/cameras/${id}/photos/${photoId}/analyse`, { timeout: 90000 }),
+
   // generous timeout: the free hosting tier sleeps and needs time to wake up
   health: () => request('GET', '/health', { auth: false, timeout: 60000 }),
+};
+
+/**
+ * Device calls — used by "camera mode" on a phone left in the field.
+ * These authenticate with the per-camera device key (x-camera-key), exactly
+ * like an ESP32-CAM or a Raspberry Pi would, so the same code path is tested
+ * by whatever hardware you put in the field.
+ */
+async function deviceRequest(path, key, body) {
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/api${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-camera-key': key },
+      body: JSON.stringify(body || {}),
+    });
+  } catch {
+    throw new ApiError('Cannot reach the server. Check the internet connection.', 0);
+  }
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+  if (!res.ok) throw new ApiError(data?.error || `Upload failed (${res.status})`, res.status);
+  return data;
+}
+
+export const cameraDevice = {
+  ping: (cameraId, key) => deviceRequest(`/cameras/${cameraId}/ping`, key, {}),
+  upload: (cameraId, key, image, extra = {}) =>
+    deviceRequest(`/cameras/${cameraId}/upload`, key, { image, ...extra }),
 };

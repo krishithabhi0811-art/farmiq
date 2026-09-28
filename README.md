@@ -17,6 +17,7 @@ Track crops, check **soil fertility**, **scan plant photos** with the camera, an
 | **Farm records (CRUD)** | Add / see / edit / delete your own crops, soil notes, pests, irrigation, expenses. Search + filter, photo attach, expected yield, area |
 | **Soil fertility** | Enter soil-test values (pH, EC, N, P, K, organic carbon) → fertility score 0-100, per-nutrient rating, and an exact **urea / DAP / MOP kg plan** for your crop and acreage, plus organic-first advice |
 | **Crop scan** | Live camera (`getUserMedia`) or photo upload → Gemini reads the leaf photo and gives a 5-bullet diagnosis and 48-hour action |
+| **Field cameras** | A camera that **lives in the field** (ESP32-CAM, Raspberry Pi, IP camera, or an old phone in "camera mode") uploads photos on a timer with its own camera key. The farmer opens them in the app: gallery, timelapse playback, "AI reading" of any photo, auto-analyse option, offline warnings. See [docs/FIELD-CAMERA.md](docs/FIELD-CAMERA.md) |
 | **AI assistant** | `POST /api/ai/generate` — 6 modes: ask anything, action plan, fertiliser plan, pest help, selling help, crop calendar. Answers in the farmer's language |
 | **Multilingual** | English, Hindi, Telugu UI + AI replies; language saved to the profile |
 | **Dashboard** | Totals, area, expected yield, at-risk count, category chart, recent records, tips |
@@ -106,7 +107,8 @@ enables `uuid-ossp`, creates `profiles`, `items`, `soil_tests`, `ai_messages`, i
 an `updated_at` trigger, **enables RLS on every table** and creates the policies:
 
 * users can `SELECT` / `UPDATE` **only their own profile**
-* users can `SELECT` / `INSERT` / `UPDATE` / `DELETE` **only their own items and soil tests**
+* users can `SELECT` / `INSERT` / `UPDATE` / `DELETE` **only their own items, soil tests and cameras**
+* cameras authenticate with a per-camera device key (`x-camera-key`) that can only add photos to that one camera — it is not a login and cannot read anything
 
 The backend uses the `service_role` key and scopes every query by the logged-in `user_id`,
 so a leaked anon key can read **nothing** — `npm run db:verify` proves it.
@@ -128,6 +130,13 @@ so a leaked anon key can read **nothing** — `npm run db:verify` proves it.
 | POST | `/api/ai/generate` | **Gemini** — chat, plan, summary, photo |
 | POST | `/api/ai/scan` | photo → crop diagnosis |
 | POST | `/api/ai/summarize` | summarize a record and save it back |
+| POST | `/api/cameras/:id/upload` | **camera in the field** sends a photo (auth: `x-camera-key`) |
+| POST | `/api/cameras/:id/ping` | camera connectivity test (auth: `x-camera-key`) |
+| GET/POST | `/api/cameras` | list / add field cameras |
+| PATCH/DELETE | `/api/cameras/:id` | rename, interval, on-off, new key / delete |
+| GET | `/api/cameras/:id/photos` | the farmer's photo gallery (paginated) |
+| DELETE | `/api/cameras/:id/photos/:photoId` | delete one photo |
+| POST | `/api/cameras/:id/photos/:photoId/analyse` | AI reading of a field photo |
 | GET | `/api/soil/crops` | crop nutrient requirement table |
 | POST | `/api/soil/fertility` | fertility score + fertiliser plan |
 | GET/POST/DELETE | `/api/soil/tests[/:id]` | saved soil tests |

@@ -12,6 +12,7 @@ import Records from './pages/Records.jsx';
 import Assistant from './pages/Assistant.jsx';
 import Soil from './pages/Soil.jsx';
 import Scan from './pages/Scan.jsx';
+import FieldCameraMode from './pages/FieldCameraMode.jsx';
 import Profile from './pages/Profile.jsx';
 
 function FullScreenLoader() {
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="assistant" element={<Assistant />} />
           <Route path="soil" element={<Soil />} />
           <Route path="scan" element={<Scan />} />
+          <Route path="camera-mode" element={<FieldCameraMode />} />
           <Route path="profile" element={<Profile />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

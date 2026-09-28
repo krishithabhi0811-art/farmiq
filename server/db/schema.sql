@@ -171,3 +171,87 @@ create policy "ai_insert_own" on public.ai_messages
 drop policy if exists "ai_delete_own" on public.ai_messages;
 create policy "ai_delete_own" on public.ai_messages
   for delete using (auth.uid() = user_id);
+
+-- ═══════════════════════════════════════════════════════════════
+--  FIELD CAMERAS — a camera fixed in the field uploads photos on a
+--  timer; the farmer opens them in the app. Devices authenticate with
+--  a per-camera device key (x-camera-key header) through the backend.
+-- ═══════════════════════════════════════════════════════════════
+create table if not exists public.cameras (
+  id                       uuid primary key default uuid_generate_v4(),
+  user_id                  uuid references public.profiles(id) on delete cascade,
+  name                     text not null,
+  field_name               text,
+  location_note            text,
+  device_key               text not null,          -- shown only to its owner
+  capture_interval_minutes integer default 60,
+  is_active                boolean default true,
+  auto_analyse             boolean default false,  -- AI-check every uploaded photo
+  last_seen_at             timestamptz,
+  last_note                text,
+  battery                  text,
+  created_at               timestamptz default now(),
+  updated_at               timestamptz default now()
+);
+
+alter table public.cameras add column if not exists field_name               text;
+alter table public.cameras add column if not exists location_note            text;
+alter table public.cameras add column if not exists capture_interval_minutes integer default 60;
+alter table public.cameras add column if not exists is_active                boolean default true;
+alter table public.cameras add column if not exists auto_analyse             boolean default false;
+alter table public.cameras add column if not exists last_seen_at             timestamptz;
+alter table public.cameras add column if not exists last_note                text;
+alter table public.cameras add column if not exists battery                  text;
+alter table public.cameras add column if not exists updated_at               timestamptz default now();
+
+create index if not exists cameras_user_idx on public.cameras (user_id);
+create unique index if not exists cameras_device_key_idx on public.cameras (device_key);
+
+create table if not exists public.camera_photos (
+  id          uuid primary key default uuid_generate_v4(),
+  camera_id   uuid references public.cameras(id) on delete cascade,
+  user_id     uuid references public.profiles(id) on delete cascade,
+  image       text not null,       -- data:image/jpeg;base64,…
+  ai_note     text,                -- AI field reading, if asked for
+  note        text,                -- note sent by the device
+  battery     text,
+  captured_at timestamptz default now(),
+  created_at  timestamptz default now()
+);
+
+alter table public.camera_photos add column if not exists ai_note text;
+alter table public.camera_photos add column if not exists note    text;
+alter table public.camera_photos add column if not exists battery text;
+
+create index if not exists camera_photos_camera_idx on public.camera_photos (camera_id, captured_at desc);
+create index if not exists camera_photos_user_idx   on public.camera_photos (user_id, created_at desc);
+
+drop trigger if exists cameras_touch on public.cameras;
+create trigger cameras_touch before update on public.cameras
+  for each row execute function public.touch_updated_at();
+
+alter table public.cameras       enable row level security;
+alter table public.camera_photos enable row level security;
+
+drop policy if exists "cameras_select_own" on public.cameras;
+create policy "cameras_select_own" on public.cameras
+  for select using (auth.uid() = user_id);
+drop policy if exists "cameras_insert_own" on public.cameras;
+create policy "cameras_insert_own" on public.cameras
+  for insert with check (auth.uid() = user_id);
+drop policy if exists "cameras_update_own" on public.cameras;
+create policy "cameras_update_own" on public.cameras
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "cameras_delete_own" on public.cameras;
+create policy "cameras_delete_own" on public.cameras
+  for delete using (auth.uid() = user_id);
+
+drop policy if exists "camera_photos_select_own" on public.camera_photos;
+create policy "camera_photos_select_own" on public.camera_photos
+  for select using (auth.uid() = user_id);
+drop policy if exists "camera_photos_insert_own" on public.camera_photos;
+create policy "camera_photos_insert_own" on public.camera_photos
+  for insert with check (auth.uid() = user_id);
+drop policy if exists "camera_photos_delete_own" on public.camera_photos;
+create policy "camera_photos_delete_own" on public.camera_photos
+  for delete using (auth.uid() = user_id);
